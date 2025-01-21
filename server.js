@@ -56,19 +56,34 @@ app.post("/signup", async (req, res) => {
 
 app.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    console.log("Request Body:", req.body);
 
-    const doctor = await Doctor.findOne({ email });
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ message: "Email and password are required" });
+    }
+
+    const doctor = await Doctor.findOne({
+      email: new RegExp(`^${email}$`, "i"),
+    });
     if (!doctor) {
+      console.log("Doctor not found for email:", email);
       return res.status(404).json({ message: "Doctor not found" });
     }
 
+    console.log("Doctor found:", doctor);
+
     const isPasswordValid = await bcrypt.compare(password, doctor.password);
     if (!isPasswordValid) {
+      console.log("Invalid password for email:", email);
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const token = jwt.sign({ id: doctor._id }, JWT_SECRET, { expiresIn: "1h" });
+    console.log("Token generated successfully");
+
     const profile = {
       id: doctor._id,
       doctorName: doctor.doctorName,
@@ -78,7 +93,8 @@ app.post("/login", async (req, res) => {
 
     res.status(200).json({ message: "Login successful", token, profile });
   } catch (error) {
-    res.status(500).json({ message: "Error logging in", error });
+    console.error("Login Error:", error);
+    res.status(500).json({ message: "Error logging in", error: error.message });
   }
 });
 
