@@ -13,7 +13,8 @@ dotenv.config();
 const app = express();
 app.use(cors());
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET =
+  process.env.JWT_SECRET || "23+40FldreX+xJbozW+tYN8Ku/U9v0C14Y9oUSdkw48=";
 
 app.use(bodyParser.json());
 
