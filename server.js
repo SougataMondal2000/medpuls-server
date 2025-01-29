@@ -11,6 +11,7 @@ const Prescription = require("./models/prescriptionModel");
 const Misc = require("./models/miscModel");
 const multer = require("multer");
 const XLSX = require("xlsx");
+const PDFDocument = require("pdfkit");
 
 dotenv.config();
 const app = express();
@@ -606,6 +607,266 @@ app.delete("/prescriptions/:id", verifyJWT, async (req, res) => {
     res.status(200).json({ message: "Prescription deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/prescriptions/download/:id", verifyJWT, async (req, res) => {
+  try {
+    const prescription = await Prescription.findById(req.params.id)
+      .populate("patientDetails")
+      .populate("doctorDetails");
+
+    if (!prescription) {
+      return res.status(404).json({ error: "Prescription not found" });
+    }
+
+    const doc = new PDFDocument({ margin: 50, size: "A4" });
+    const sanitizedName = prescription.patientDetails.name
+      .replace(/\s+/g, "_")
+      .toLowerCase();
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=${sanitizedName}_prescription.pdf`
+    );
+    res.setHeader("Content-Type", "application/pdf");
+    doc.pipe(res);
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(22)
+      .fillColor("#2563eb")
+      .text("MedPuls", { align: "center" });
+
+    // doc.moveDown(0.3);
+    // doc
+    //   .fontSize(9)
+    //   .fillColor("#64748b")
+    //   .text("123 Medical Center Drive, City, State - 12345", {
+    //     align: "center",
+    //   })
+    //   .text(
+    //     `Phone: ${prescription.doctorDetails.phoneNo} | Email: ${prescription.doctorDetails.email}`,
+    //     {
+    //       align: "center",
+    //     }
+    //   );
+
+    // doc.moveDown(0.3);
+
+    doc.moveDown(0.5);
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor("#0f172a")
+      .text(`Dr. ${prescription.doctorDetails.doctorName}`, {
+        align: "center",
+      });
+
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#475569")
+      .text(
+        `Email: ${prescription.doctorDetails.email} | Phone: ${prescription.doctorDetails.phoneNo}`,
+        {
+          align: "center",
+        }
+      );
+
+    doc.moveDown(0.5);
+    doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor("#e2e8f0").stroke();
+
+    const patientBoxY = doc.y;
+    doc.rect(50, patientBoxY, 500, 80).fillColor("#f8fafc").fill();
+
+    doc
+      .fillColor("#0f172a")
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .text("PATIENT INFORMATION", 70, patientBoxY + 10);
+
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .text(`Name: ${prescription.patientDetails.name}`, 70, patientBoxY + 30)
+      .text(
+        `Age: ${prescription.patientDetails.age} | Sex: ${prescription.patientDetails.sex} | Phone: ${prescription.patientDetails.phone}`,
+        70,
+        patientBoxY + 45
+      )
+      .text(
+        `Address: ${prescription.patientDetails.address.addressLine1}`,
+        70,
+        patientBoxY + 60
+      );
+
+    doc.moveDown(2);
+    const vitalsY = doc.y;
+    doc.rect(50, vitalsY, 500, 65).fillColor("#f0f9ff").fill();
+
+    doc
+      .fillColor("#2563eb")
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .text("VITAL SIGNS & MEASUREMENTS", 60, vitalsY + 10);
+
+    const heightInMeters = parseInt(prescription.patientDetails.height) / 100;
+    const weightInKg = parseInt(prescription.patientDetails.weight);
+    const bmi = (weightInKg / (heightInMeters * heightInMeters)).toFixed(1);
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor("#0f172a")
+      .text("Height:", 70, vitalsY + 30)
+      .text("Weight:", 200, vitalsY + 30)
+      .text("BMI:", 330, vitalsY + 30)
+      .text("Blood Pressure:", 440, vitalsY + 30);
+
+    doc
+      .font("Helvetica")
+      .text(`${prescription.patientDetails.height} cm`, 110, vitalsY + 30)
+      .text(`${prescription.patientDetails.weight} kg`, 240, vitalsY + 30)
+      .text(`${bmi} kg/m²`, 355, vitalsY + 30)
+      .text(`${prescription.patientDetails.bp}`, 515, vitalsY + 30);
+
+    doc.font("Helvetica-Bold").text("Pulse:", 70, vitalsY + 45);
+
+    doc
+      .font("Helvetica")
+      .text(`${prescription.patientDetails.pulse} bpm`, 105, vitalsY + 45);
+
+    // Description Box
+    doc.moveDown(2);
+    const descY = doc.y;
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .fillColor("#2563eb")
+      .text("DIAGNOSIS & OBSERVATIONS", 50, descY);
+
+    // Calculate text height
+    const descriptionText = prescription.description.join("\n");
+    const descriptionWidth = 480;
+    const textOptions = {
+      width: descriptionWidth,
+      align: "left",
+    };
+
+    // Measure text height
+    const descriptionHeight = doc.heightOfString(descriptionText, {
+      width: descriptionWidth,
+      align: "left",
+    });
+
+    // Draw box with padding
+    const boxPadding = 20;
+    const totalBoxHeight = descriptionHeight + boxPadding * 2;
+
+    // Draw dashed border around text
+    doc
+      .rect(50, descY + 20, 500, totalBoxHeight)
+      .dash(4, { space: 2 })
+      .stroke();
+
+    // Add text inside box
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#0f172a")
+      .text(descriptionText, 60, descY + 20 + boxPadding, textOptions);
+
+    // Medicines Table
+    doc.moveDown(2);
+    const medicineStartY = doc.y;
+    doc.rect(50, medicineStartY, 500, 20).fillColor("#f1f5f9").fill();
+
+    doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(9);
+
+    // Updated table headers with remarks
+    doc.text("No.", 55, medicineStartY + 6);
+    doc.text("Medicine", 85, medicineStartY + 6);
+    doc.text("Dosage", 210, medicineStartY + 6);
+    doc.text("Frequency", 290, medicineStartY + 6);
+    doc.text("Duration", 370, medicineStartY + 6);
+    doc.text("Remarks", 440, medicineStartY + 6);
+
+    // Table borders
+    doc.moveTo(50, medicineStartY).lineTo(550, medicineStartY).stroke();
+    doc
+      .moveTo(50, medicineStartY + 20)
+      .lineTo(550, medicineStartY + 20)
+      .stroke();
+
+    // Vertical lines with updated positions
+    const medicineEndY =
+      medicineStartY + 20 + prescription.medicines.length * 20;
+    [50, 80, 200, 280, 360, 430, 550].forEach((x) => {
+      doc.moveTo(x, medicineStartY).lineTo(x, medicineEndY).stroke();
+    });
+
+    // Table content with remarks
+    doc.font("Helvetica").fontSize(9);
+    prescription.medicines.forEach((med, index) => {
+      const y = medicineStartY + 20 + index * 20;
+      doc.text(`${index + 1}.`, 55, y + 6);
+      doc.text(med.drug, 85, y + 6);
+      doc.text(med.dose, 210, y + 6);
+      doc.text(med.frequency, 290, y + 6);
+      doc.text(`${med.day} days`, 370, y + 6);
+      doc.text(med.remarks || "-", 440, y + 6);
+      doc
+        .moveTo(50, y + 20)
+        .lineTo(550, y + 20)
+        .stroke();
+    });
+
+    // Tests Section with less spacing
+    if (prescription.tests.length > 0) {
+      doc.moveDown(1);
+      const testsStartY = doc.y;
+      doc.rect(50, testsStartY, 500, 20).fillColor("#f1f5f9").fill();
+
+      doc
+        .fillColor("#0f172a")
+        .font("Helvetica-Bold")
+        .fontSize(11)
+        .text("RECOMMENDED TESTS", 60, testsStartY + 6);
+
+      doc.moveTo(50, testsStartY).lineTo(550, testsStartY).stroke();
+      doc
+        .moveTo(50, testsStartY + 20)
+        .lineTo(550, testsStartY + 20)
+        .stroke();
+
+      const testsEndY = testsStartY + 20 + prescription.tests.length * 20;
+      doc.moveTo(50, testsStartY).lineTo(50, testsEndY).stroke();
+      doc.moveTo(550, testsStartY).lineTo(550, testsEndY).stroke();
+
+      doc.font("Helvetica").fontSize(9);
+      prescription.tests.forEach((test, index) => {
+        const y = testsStartY + 20 + index * 20;
+        doc.text(`${index + 1}. ${test}`, 60, y + 6);
+        doc
+          .moveTo(50, y + 20)
+          .lineTo(550, y + 20)
+          .stroke();
+      });
+    }
+
+    // Compact signature at bottom of page
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor("#0f172a")
+      .text("Doctor's Signature:", 400, 750)
+      .font("Helvetica")
+      .text(`Dr. ${prescription.doctorDetails.doctorName}`, 400, 765);
+
+    doc.end();
+  } catch (error) {
+    console.error("Error generating prescription PDF:", error);
+    res.status(500).json({ error: "Failed to generate PDF" });
   }
 });
 
