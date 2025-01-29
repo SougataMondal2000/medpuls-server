@@ -12,6 +12,7 @@ const Misc = require("./models/miscModel");
 const multer = require("multer");
 const XLSX = require("xlsx");
 const PDFDocument = require("pdfkit");
+const upload = require("./config/cloudinary");
 
 dotenv.config();
 const app = express();
@@ -21,9 +22,6 @@ const JWT_SECRET =
   process.env.JWT_SECRET || "23+40FldreX+xJbozW+tYN8Ku/U9v0C14Y9oUSdkw48=";
 
 app.use(bodyParser.json());
-
-const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
 
 mongoose
   .connect(process.env.MONGODB_URI)
@@ -78,9 +76,11 @@ const validateData = (row) => {
   return true;
 };
 
-app.post("/signup", async (req, res) => {
+app.post("/signup", upload.single("signature"), async (req, res) => {
   try {
-    const { doctorName, email, phoneNo, password } = req.body;
+    const { doctorName, email, phoneNo, password, clinicName, clinicAddress } =
+      req.body;
+    const signature = req.file ? req.file.path : "";
 
     const existingDoctor = await Doctor.findOne({ email });
     if (existingDoctor) {
@@ -93,6 +93,9 @@ app.post("/signup", async (req, res) => {
       doctorName,
       email,
       phoneNo,
+      clinicName,
+      clinicAddress,
+      signature,
       password: hashedPassword,
     });
 
@@ -635,23 +638,17 @@ app.get("/prescriptions/download/:id", verifyJWT, async (req, res) => {
       .font("Helvetica-Bold")
       .fontSize(22)
       .fillColor("#2563eb")
-      .text("MedPuls", { align: "center" });
+      .text(`${prescription.doctorDetails.clinicName}`, { align: "center" });
 
-    // doc.moveDown(0.3);
-    // doc
-    //   .fontSize(9)
-    //   .fillColor("#64748b")
-    //   .text("123 Medical Center Drive, City, State - 12345", {
-    //     align: "center",
-    //   })
-    //   .text(
-    //     `Phone: ${prescription.doctorDetails.phoneNo} | Email: ${prescription.doctorDetails.email}`,
-    //     {
-    //       align: "center",
-    //     }
-    //   );
-
-    // doc.moveDown(0.3);
+    doc
+      .fontSize(9)
+      .fillColor("#64748b")
+      .text(
+        `${prescription.doctorDetails.clinicAddress.addressLine1}, ${prescription.doctorDetails.clinicAddress.city}, ${prescription.doctorDetails.clinicAddress.state}, Pincode - ${prescription.doctorDetails.clinicAddress.pincode}`,
+        {
+          align: "center",
+        }
+      );
 
     doc.moveDown(0.5);
     doc
@@ -736,7 +733,6 @@ app.get("/prescriptions/download/:id", verifyJWT, async (req, res) => {
       .font("Helvetica")
       .text(`${prescription.patientDetails.pulse} bpm`, 105, vitalsY + 45);
 
-    // Description Box
     doc.moveDown(2);
     const descY = doc.y;
     doc
@@ -745,7 +741,6 @@ app.get("/prescriptions/download/:id", verifyJWT, async (req, res) => {
       .fillColor("#2563eb")
       .text("DIAGNOSIS & OBSERVATIONS", 50, descY);
 
-    // Calculate text height
     const descriptionText = prescription.description.join("\n");
     const descriptionWidth = 480;
     const textOptions = {
@@ -753,37 +748,31 @@ app.get("/prescriptions/download/:id", verifyJWT, async (req, res) => {
       align: "left",
     };
 
-    // Measure text height
     const descriptionHeight = doc.heightOfString(descriptionText, {
       width: descriptionWidth,
       align: "left",
     });
 
-    // Draw box with padding
     const boxPadding = 20;
     const totalBoxHeight = descriptionHeight + boxPadding * 2;
 
-    // Draw dashed border around text
     doc
       .rect(50, descY + 20, 500, totalBoxHeight)
       .dash(4, { space: 2 })
       .stroke();
 
-    // Add text inside box
     doc
       .font("Helvetica")
       .fontSize(9)
       .fillColor("#0f172a")
       .text(descriptionText, 60, descY + 20 + boxPadding, textOptions);
 
-    // Medicines Table
     doc.moveDown(2);
     const medicineStartY = doc.y;
     doc.rect(50, medicineStartY, 500, 20).fillColor("#f1f5f9").fill();
 
     doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(9);
 
-    // Updated table headers with remarks
     doc.text("No.", 55, medicineStartY + 6);
     doc.text("Medicine", 85, medicineStartY + 6);
     doc.text("Dosage", 210, medicineStartY + 6);
@@ -791,21 +780,18 @@ app.get("/prescriptions/download/:id", verifyJWT, async (req, res) => {
     doc.text("Duration", 370, medicineStartY + 6);
     doc.text("Remarks", 440, medicineStartY + 6);
 
-    // Table borders
     doc.moveTo(50, medicineStartY).lineTo(550, medicineStartY).stroke();
     doc
       .moveTo(50, medicineStartY + 20)
       .lineTo(550, medicineStartY + 20)
       .stroke();
 
-    // Vertical lines with updated positions
     const medicineEndY =
       medicineStartY + 20 + prescription.medicines.length * 20;
     [50, 80, 200, 280, 360, 430, 550].forEach((x) => {
       doc.moveTo(x, medicineStartY).lineTo(x, medicineEndY).stroke();
     });
 
-    // Table content with remarks
     doc.font("Helvetica").fontSize(9);
     prescription.medicines.forEach((med, index) => {
       const y = medicineStartY + 20 + index * 20;
@@ -821,7 +807,6 @@ app.get("/prescriptions/download/:id", verifyJWT, async (req, res) => {
         .stroke();
     });
 
-    // Tests Section with less spacing
     if (prescription.tests.length > 0) {
       doc.moveDown(1);
       const testsStartY = doc.y;
@@ -854,14 +839,29 @@ app.get("/prescriptions/download/:id", verifyJWT, async (req, res) => {
       });
     }
 
-    // Compact signature at bottom of page
     doc
       .font("Helvetica-Bold")
       .fontSize(9)
       .fillColor("#0f172a")
-      .text("Doctor's Signature:", 400, 750)
-      .font("Helvetica")
-      .text(`Dr. ${prescription.doctorDetails.doctorName}`, 400, 765);
+      .text("Doctor's Signature:", 400, 750);
+
+    if (prescription.doctorDetails.signature) {
+      try {
+        doc.image(prescription.doctorDetails.signature, 400, 765, {
+          width: 100,
+          height: 40,
+        });
+      } catch (error) {
+        console.error("Error adding signature:", error);
+        doc
+          .font("Helvetica")
+          .text(`Dr. ${prescription.doctorDetails.doctorName}`, 400, 765);
+      }
+    } else {
+      doc
+        .font("Helvetica")
+        .text(`Dr. ${prescription.doctorDetails.doctorName}`, 400, 765);
+    }
 
     doc.end();
   } catch (error) {

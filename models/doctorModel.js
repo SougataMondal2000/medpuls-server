@@ -15,6 +15,15 @@ const doctorSchema = new mongoose.Schema({
     ref: "Prescription",
     default: [],
   },
+  clinicName: { type: String },
+  clinicAddress: {
+    addressLine1: { type: String },
+    addressLine2: { type: String },
+    pincode: { type: String },
+    city: { type: String },
+    state: { type: String },
+  },
+  signature: { type: String },
 });
 
 const Doctor = mongoose.model("Doctor", doctorSchema);
