@@ -540,6 +540,15 @@ app.get("/get-all-prescriptions/:doctorId", verifyJWT, async (req, res) => {
   }
 });
 
+app.get("/get-prescriptions", verifyJWT, async (req, res) => {
+  try {
+    const prescriptions = await Prescription.find();
+    res.status(200).json(prescriptions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get("/prescriptions/:id", verifyJWT, async (req, res) => {
   try {
     const { id } = req.params;
