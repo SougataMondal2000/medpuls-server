@@ -23,6 +23,8 @@ const JWT_SECRET =
 
 app.use(bodyParser.json());
 
+const uploadXLSX = multer({ dest: "uploads/" });
+
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
@@ -42,7 +44,7 @@ const verifyJWT = (req, res, next) => {
     return res.status(401).json({ message: "Authorization header is missing" });
   }
 
-  const token = authHeader.split(" ")[1]; // Extract the token (e.g., "Bearer <token>")
+  const token = authHeader.split(" ")[1];
 
   if (!token) {
     return res.status(401).json({ message: "Token is missing" });
@@ -943,55 +945,32 @@ app.post("/bulk-add-misc", verifyJWT, async (req, res) => {
 
 app.post(
   "/bulk-add-misc-excel",
-  verifyJWT,
-  upload.single("file"),
+  uploadXLSX.single("file"),
   async (req, res) => {
     try {
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
-
-      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const filePath = req.file.path;
+      const workbook = XLSX.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const data = XLSX.utils.sheet_to_json(sheet);
 
-      if (!data.length) {
-        return res.status(400).json({ error: "Excel file is empty" });
-      }
+      const misc = data
+        .map((item) => ({
+          name: item.name,
+          type: item.type,
+        }))
+        .filter((item) => item.name);
 
-      const validatedData = [];
-      const errors = [];
-
-      data.forEach((row, index) => {
-        try {
-          if (validateData(row)) {
-            validatedData.push(row);
-          }
-        } catch (error) {
-          errors.push(`Row ${index + 1}: ${error.message}`);
-        }
-      });
-
-      if (errors.length > 0) {
-        return res.status(400).json({
-          error: "Validation errors found",
-          details: errors,
+      if (misc.length > 0) {
+        await Misc.insertMany(misc);
+        res.status(201).json({
+          message: `${misc.length} data added successfully.`,
         });
+      } else {
+        res.status(400).json({ message: "No valid data found in the file." });
       }
-
-      const result = await Misc.insertMany(validatedData);
-
-      res.status(200).json({
-        message: "Bulk upload successful",
-        recordsInserted: result.length,
-      });
     } catch (error) {
-      console.error("Bulk upload error:", error);
-      res.status(500).json({
-        error: "Failed to process bulk upload",
-        details: error.message,
-      });
+      res.status(500).json({ message: error.message });
     }
   }
 );
