@@ -320,7 +320,7 @@ app.delete("/doctor/:id", verifyJWT, async (req, res) => {
 
 app.get("/patients", verifyJWT, async (req, res) => {
   try {
-    const patients = await Patient.find();
+    const patients = await Patient.find().populate("previousPrescriptions");
     res.status(200).json(patients);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -955,6 +955,7 @@ app.post("/bulk-add-misc", verifyJWT, async (req, res) => {
 app.post(
   "/bulk-add-misc-excel",
   uploadXLSX.single("file"),
+  verifyJWT,
   async (req, res) => {
     try {
       const filePath = req.file.path;
