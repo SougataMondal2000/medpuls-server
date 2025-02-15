@@ -360,19 +360,7 @@ app.post("/patients", verifyJWT, async (req, res) => {
       bp,
     } = req.body;
 
-    const requiredFields = [
-      "name",
-      "age",
-      "sex",
-      "phone",
-      "mail",
-      "guardianName",
-      "height",
-      "weight",
-      "pulse",
-      "bp",
-      "parentId",
-    ];
+    const requiredFields = ["name", "age", "sex", "phone", "parentId"];
 
     const missingFields = requiredFields.filter((field) => !req.body[field]);
 
@@ -383,7 +371,7 @@ app.post("/patients", verifyJWT, async (req, res) => {
       });
     }
 
-    const requiredAddressFields = ["addressLine1", "pincode", "city", "state"];
+    const requiredAddressFields = ["pincode"];
     const missingAddressFields = requiredAddressFields.filter(
       (field) => !address || !address[field]
     );

@@ -5,7 +5,7 @@ const patientSchema = new mongoose.Schema({
   address: {
     addressLine1: { type: String },
     addressLine2: { type: String },
-    pincode: { type: String, required: true },
+    pincode: { type: String },
     city: { type: String },
     state: { type: String },
   },
