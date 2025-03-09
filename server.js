@@ -654,7 +654,7 @@ app.get("/prescriptions/download/:id", verifyJWT, async (req, res) => {
       .font("Helvetica-Bold")
       .fontSize(12)
       .fillColor("#0f172a")
-      .text(`Dr. ${prescription.doctorDetails.doctorName}`, {
+      .text(`${prescription.doctorDetails.doctorName}`, {
         align: "center",
       });
 
@@ -854,12 +854,12 @@ app.get("/prescriptions/download/:id", verifyJWT, async (req, res) => {
         console.error("Error adding signature:", error);
         doc
           .font("Helvetica")
-          .text(`Dr. ${prescription.doctorDetails.doctorName}`, 400, 765);
+          .text(`${prescription.doctorDetails.doctorName}`, 400, 765);
       }
     } else {
       doc
         .font("Helvetica")
-        .text(`Dr. ${prescription.doctorDetails.doctorName}`, 400, 765);
+        .text(`${prescription.doctorDetails.doctorName}`, 400, 765);
     }
 
     doc.end();
